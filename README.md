@@ -13,9 +13,11 @@ evaluate people‑detection and multi‑object‑tracking pipelines offline:
 * **Measure** detection quality (IoU) and ID‑tracking consistency
   (`evaluator.py`).
 
+* **Visualiser** overlays ground truth and detection results on the images for visual inspection.
+
+
 All communication uses **standard** messages
-(`sensor_msgs/Image`, `vision_msgs/Detection2DArray`) – no custom `.msg`
-files needed.
+(`sensor_msgs/Image`, `vision_msgs/Detection2DArray`) – no custom `.msg` files needed.
 
 ---
 
@@ -27,6 +29,7 @@ tracking_test/
 │   ├── __init__.py
 │   ├── ground_truth_publisher.py
 │   ├── mock_detection_publisher.py
+│   ├── visualiser.py
 │   ├── detector_node.py               # template for a real detector
 │   └── evaluator.py
 ├── launch/
@@ -67,35 +70,58 @@ Install Python wheels with `pip` if rosdep misses any.
 
 ---
 
-## Dataset format
+## Dataset 
 
-JSON excerpt:
-
-```json
-{
-  "Timestamp": 1730892897.0809238,
-  "File": "1730892897_080923740.png",
-  "Labels": [
-    { "Class": "human1", "BoundingBoxes": [85.05, 58.85, 102, 214] },
-    { "Class": "human3", "BoundingBoxes": [457.8, 26.3, 107, 281] }
-  ]
-}
+The dataset **is already provided with this repository** in:
 ```
+tracking_test/dataset/
+```
+It contains:
+- `labeled_data_output_images_edited.json` — Labeled bounding box data.
+- `output_images/` — Corresponding image frames.
 
-* `File` ‑ image file relative to `image_dir`
-* `BoundingBoxes` ‑ `[x, y, width, height]` (pixels)
-* `Class` must encode a numeric track‑ID (`human3` → ID 3).
+No dataset preparation is required.
 
 ---
 
 ## Nodes
 
-| Executable | Description | Key Parameters |
-|------------|-------------|----------------|
-| **ground_truth_publisher** | Publishes `/image_raw` and `/ground_truth` from a JSON label file. | `json_path`, `image_dir`, `publish_rate` |
-| **mock_detection_publisher** | Generates noisy detections and tracking IDs for testing. | `pos_jitter_px`, `size_jitter_pct`, `drop_prob`, `id_switch_prob` |
-| **detector_node** | **Template** – plug in your real model / tracker. Publishes `/detections`. | `model_path`, `conf_threshold`, `nms_threshold` |
-| **evaluator** | Subscribes to GT & detections, prints precision/recall + ID‑switch stats. | `IOU_THRESHOLD`, `PRINT_EVERY` (constants in code) |
+### 1. Ground Truth Publisher
+Publishes the dataset images and their ground-truth bounding boxes.
+
+**Topic outputs:**
+- `/image_raw` (`sensor_msgs/Image`)
+- `/ground_truth` (`vision_msgs/Detection2DArray`)
+
+### 2. Mock Detection Publisher
+Simulates the output of a real object detector for testing and evaluation.
+
+**Topic outputs:**
+- `/detections` (`vision_msgs/Detection2DArray`)
+
+This can be replaced with a real detector by publishing to the `/detections` topic.
+
+### 3. Evaluator
+Subscribes to both `/ground_truth` and `/detections` and computes:
+- True Positives (TP)
+- False Positives (FP)
+- False Negatives (FN)
+- Precision (P)
+- Recall (R)
+- ID-switches (for tracking)
+
+Prints metrics every 50 frames and a final summary at the end.
+
+### 4. Visualiser
+Subscribes to `/image_raw`, `/ground_truth`, and `/detections`, and publishes an annotated image to `/eval_viz` showing:
+- Ground truth boxes (e.g., green)
+- Detection boxes (e.g., red)
+- IDs for tracking
+
+View in:
+```bash
+ros2 run rqt_image_view rqt_image_view /eval_viz
+```
 
 ---
 
@@ -119,9 +145,11 @@ ros2 launch tracking_test tracking_test.launch.py
 
 The launch file starts:
 
-1. `mock_detection_publisher`
-2. `evaluator`   (after 1 s)
-3. `ground_truth_publisher` (after 3 s, with dataset parameters)
+1. The **mock detection publisher** (or your real detector)
+2. The **evaluator**
+3. The **visualiser**
+4. The **ground truth publisher**
+5. Optionally opens `rqt_image_view`
 
 Edit `launch/tracking_test.launch.py` to:
 
@@ -162,4 +190,4 @@ FINAL: TP=1189  FP=8  FN=68  P=0.993  R=0.946  ID-switches=71
 
 ## License
 
-MIT.  See `LICENSE` file.
+This project is licensed under the MIT License.
