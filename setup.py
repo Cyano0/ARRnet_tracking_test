@@ -22,6 +22,9 @@ setup(
             'ground_truth_publisher = tracking_test.ground_truth_publisher:main',
             'mock_detection_publisher = tracking_test.mock_detection_publisher:main',
             'evaluator = tracking_test.evaluator:main',
+            'visualiser = tracking_test.visualiser:main',
+            # optional real detector template:
+            'detector_node = tracking_test.detector_node:main',
         ],
     },
 )
